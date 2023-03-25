@@ -1,12 +1,13 @@
 /*
 This program uses C++17 functionality. You may want to use e.g. g++-10 or newer and set the c++-standard to use
-Example: g++-10 -std=c++17 ./main.cpp 
+Example: g++-10 -std=c++17 ./main.cpp parser.cpp
 */
 
 #include <stdio.h>
 #include <iostream>
 #include <filesystem>
 #include <unistd.h>
+#include "parser.h"
 
 void printhelp(std::string self){
     std::cout << "Usage: " << self << " [-h] [-i input_file] [-w working-dir]" << std::endl;
@@ -42,11 +43,21 @@ int main (int argc, char *argv[]){
     std::cout << "Damaged input file: " << inputfile << std::endl;
     std::cout << "Working directory: " << workdir << std::endl;
 
+    // Check inputfile
+    if (!std::filesystem::exists(inputfile)) { // check if the file exists        
+        std::cout << "Inputfile  \"" << inputfile << "\" doesn't exist or isn't accessible. Aborting!" << std::endl;
+    }
+
     // Check / create working directory
     if (!std::filesystem::exists(workdir)) { // check if the directory exists
         std::filesystem::create_directory(workdir); // create the directory if it does not exist
         std::cout << "Directory created: " << workdir << std::endl;
     }
+   
+    parser* fileparserPtr = new parser(inputfile);
+    fileparserPtr->parse();
+    delete fileparserPtr;
+    
 
     return 0;
 }
