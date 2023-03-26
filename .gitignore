@@ -1,0 +1,5 @@
+*.out
+test-files/*.file
+src/corrupter
+src/salvager
+.vscode/*

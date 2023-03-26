@@ -1,6 +1,6 @@
 /*
 This program uses C++17 functionality. You may want to use e.g. g++-10 or newer and set the c++-standard to use
-Example: g++-10 -std=c++17 ./main.cpp parser.cpp
+Example: g++-10 -std=c++17 ./main.cpp parser.cpp -lz
 */
 
 #include <stdio.h>
@@ -56,6 +56,28 @@ int main (int argc, char *argv[]){
    
     parser* fileparserPtr = new parser(inputfile);
     fileparserPtr->parse();
+    if (fileparserPtr->repair()){
+        //Inputdata could be repaired
+        std::string outfile = workdir;
+        if (!outfile.empty() && outfile.back() == '/') {
+            outfile.pop_back();
+            }
+        outfile=outfile+"/candidate.gz";
+
+        std::cout << "Please wait while data is being written to \""+outfile+"\"." << std::endl;
+
+        if (fileparserPtr->write_output_file(outfile)){
+            std::cout << "repaired data has been written to \""+outfile+"\"." << std::endl;
+        }
+        else {
+            std::cerr << "Unable to write data to \""+outfile+"\"." << std::endl;
+        }
+    }
+
+    //Wait for users input
+    std::cout << "Press any key to continue..." << std::endl;
+    getchar();
+
     delete fileparserPtr;
     
 
