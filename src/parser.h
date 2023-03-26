@@ -8,14 +8,17 @@
 #include <zlib.h>
 #include <cmath>
 #include <thread>
+#include <vector>
+#include <atomic>
 #include <mutex>
+#include <condition_variable>
 
 class parser {
     protected:
     std::string _inputfile;
     std::vector<uint8_t> _inputcontent;
     std::vector<uint64_t> _positions;
-
+ 
     public:
     parser(std::string inputfile); //constructor
     ~parser(); //destructor

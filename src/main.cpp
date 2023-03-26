@@ -62,8 +62,9 @@ int main (int argc, char *argv[]){
     }
     std::cout << "File has been read..." << std::endl;    
     
-    if (fileparserPtr->repair()){
-    //if (fileparserPtr->repair_mt()){
+    //if (fileparserPtr->repair()){
+    if (fileparserPtr->repair_mt()){
+        std::cout << "Found a possible candidate." << std::endl;
         //Inputdata could be repaired
         std::string outfile = workdir;
         if (!outfile.empty() && outfile.back() == '/') {
@@ -71,7 +72,7 @@ int main (int argc, char *argv[]){
             }
         outfile=outfile+"/candidate.gz";
 
-        std::cout << "Please wait while data is being written to \""+outfile+"\"." << std::endl;
+        std::cout << "Please wait while repaired data is being written to \""+outfile+"\"." << std::endl;
 
         if (fileparserPtr->write_output_file(outfile)){
             std::cout << "repaired data has been written to \""+outfile+"\"." << std::endl;
@@ -83,13 +84,7 @@ int main (int argc, char *argv[]){
     else {
         std::cout << "Unable to find a solution...Sorry." << std::endl;    
     }
-
-    //Wait for users input
-    std::cout << "Press any key to continue..." << std::endl;
-    getchar();
-
-    delete fileparserPtr;
-    
+    delete fileparserPtr;   
 
     return 0;
 }

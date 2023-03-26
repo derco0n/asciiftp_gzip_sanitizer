@@ -96,11 +96,16 @@ bool parser::repair() {
         for (uint64_t j = 0; j < _positions.size(); j++) {
             if (i & (1 << j)) {
                 // Replace 0x0a with 0x0d at this position
-                std::cout << "Altering \"";
-                std::cout << std::showbase << std::hex << static_cast<int>(repaired_content[_positions[j]]);
-                std::cout << "\" to \"0x0D\" at position ";
-                std::cout << std::showbase << std::hex << static_cast<int>(j) << std::endl;
-                repaired_content[_positions[j]] = uint8_t(0x0D);
+                if (repaired_content[_positions[j]]==0x0A){
+                    /*
+                    std::cout << "Altering \"";
+                    std::cout << std::showbase << std::hex << static_cast<int>(repaired_content[_positions[j]]);
+                    std::cout << "\" to \"0x0D\" at position ";
+                    std::cout << std::showbase << std::hex << static_cast<int>(j) << std::endl;
+                    */
+                    repaired_content[_positions[j]] = uint8_t(0x0D);
+                }
+                
             } else {
                 // Keep the original byte at this position
                 /*
@@ -131,75 +136,56 @@ bool parser::repair() {
     return false;
 }
 
-
 bool parser::repair_mt() {
     if (is_valid_gzip(_inputcontent)){
         std::cout << "Input-data is already valid gzip. Nothing to do." << std::endl;    
         return true;
     }
+    
+    // Make a copy of the original input content
+    std::vector<uint8_t> repaired_content = _inputcontent;    
 
-     // Make a copy of the original input content
-    std::vector<uint8_t> repaired_content = _inputcontent;
+    std::vector<std::thread> threads;
+    int num_threads = std::thread::hardware_concurrency();
+    std::cout << "Checking data multi-threaded using " << num_threads << " Threads." << std::endl;
+    int batch_size = (1 << _positions.size()) / num_threads;
 
-    // Split the work into multiple threads
-    const int num_threads = std::thread::hardware_concurrency();
-    std::cout << "Checking data using " << num_threads << " threads in parallel" << std::endl;
-    std::vector<std::thread> threads(num_threads);
-    std::vector<bool> results(num_threads);
-    std::mutex mutex;
+    bool found_valid = false;
+    for (int t = 0; t < num_threads; t++) {
+        uint64_t start = t * batch_size;
+        uint64_t end = (t == num_threads - 1) ? (1 << _positions.size()) : (start + batch_size);
 
-    const uint64_t chunk_size = (1 << _positions.size() + num_threads - 1) / num_threads;
+        threads.emplace_back([&, start, end] {
+            for (uint64_t i = start; i < end; i++) { 
+                std::vector<uint8_t> local_repaired = repaired_content;
+                for (uint64_t j = 0; j < _positions.size(); j++) {
+                    if (i & (1 << j)) {
+                        // Replace 0x0a with 0x0d at this position
+                        if (local_repaired[_positions[j]] == 0x0A) {
+                            local_repaired[_positions[j]] = uint8_t(0x0D);
+                        }
+                    } else {
+                        local_repaired[_positions[j]] = _inputcontent[_positions[j]];
+                    }
+                }
 
-    // Define a lambda function that each thread will execute
-    auto thread_function = [&](int thread_idx) {
-        uint64_t start = thread_idx * chunk_size;
-        uint64_t end = std::min(start + chunk_size, (uint64_t)(1 << _positions.size()));
-
-        for (uint64_t i = start; i < end; i++) {
-            std::vector<uint8_t> local_repaired_content = repaired_content;
-
-            for (uint64_t j = 0; j < _positions.size(); j++) {
-                if (i & (1 << j)) {
-                    // Replace 0x0a with 0x0d at this position
-                    local_repaired_content[_positions[j]] = 0x0d;
-                } else {
-                    // Keep the original byte at this position
-                    local_repaired_content[_positions[j]] = _inputcontent[_positions[j]];
+                if (is_valid_gzip(local_repaired)) {
+                    // The repaired content is valid, so we're done
+                    _inputcontent = local_repaired;
+                    found_valid = true;
+                    break;
                 }
             }
-
-            // Test if the repaired content is a valid gzip file
-            if (is_valid_gzip(local_repaired_content)) {
-                std::lock_guard<std::mutex> lock(mutex);
-                // The repaired content is valid, so we're done
-                _inputcontent = local_repaired_content;
-                results[thread_idx] = true;
-                return;
-            }
-        }
-        results[thread_idx] = false;
-    };
-
-    // Start the threads
-    for (int i = 0; i < num_threads; i++) {
-        threads[i] = std::thread(thread_function, i);
+        });
     }
 
-    // Wait for the threads to finish
-    for (int i = 0; i < num_threads; i++) {
-        threads[i].join();
+    for (auto& thread : threads) {
+        thread.join();
     }
 
-    // Check if any of the threads found a valid result
-    for (int i = 0; i < num_threads; i++) {
-        if (results[i]) {
-            return true;
-        }
-    }
-
-    // If we get here, we couldn't repair the file
-    return false;
+    return found_valid;
 }
+
 
 // Public accessor function for _inputcontent
 const std::vector<uint8_t>& parser::getInputContent() const {
