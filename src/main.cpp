@@ -1,6 +1,7 @@
 /*
 This program uses C++17 functionality. You may want to use e.g. g++-10 or newer and set the c++-standard to use
 Example: g++-10 -std=c++17 ./main.cpp parser.cpp -lz
+Or just use the Makefile
 */
 
 #include <stdio.h>
@@ -55,8 +56,14 @@ int main (int argc, char *argv[]){
     }
    
     parser* fileparserPtr = new parser(inputfile);
-    fileparserPtr->parse();
+    if (!fileparserPtr->parse()){
+        std::cerr << "Unable to read inputfile. Aborting!" << std::endl;
+        return 1;
+    }
+    std::cout << "File has been read..." << std::endl;    
+    
     if (fileparserPtr->repair()){
+    //if (fileparserPtr->repair_mt()){
         //Inputdata could be repaired
         std::string outfile = workdir;
         if (!outfile.empty() && outfile.back() == '/') {
@@ -72,6 +79,9 @@ int main (int argc, char *argv[]){
         else {
             std::cerr << "Unable to write data to \""+outfile+"\"." << std::endl;
         }
+    }
+    else {
+        std::cout << "Unable to find a solution...Sorry." << std::endl;    
     }
 
     //Wait for users input

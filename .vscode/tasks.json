@@ -3,15 +3,17 @@
         {
             "type": "cppbuild",
             "label": "C/C++: g++ Aktive Datei kompilieren",
-            "command": "/usr/bin/g++",
+            "command": "/usr/bin/g++-10",
             "args": [
-                "-std",
-                "c++17",
+                "-std=c++17",
+                "-pthread",
+                "-lz",
                 "-fdiagnostics-color=always",
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "${fileDirname}/${fileBasenameNoExtension}",
+                "${fileDirname}/parser.cpp"
             ],
             "options": {
                 "cwd": "${fileDirname}"

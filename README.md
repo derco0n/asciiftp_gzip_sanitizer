@@ -8,6 +8,8 @@ FTP-ASCII-mode tries to convert line ending from windows-style (CRLF) to unix/li
 ## Why is it so difficult to repair?
 If you have a file, that had been altered by the process described above, it is not possible to reliably tell which 0x0D and 0x0A had been there before and which is there due to the modification.
 
+See [here](test-files/info.md) about my analysis.
+
 ## What does this program
 In my special case, i transfered a gzip-file from linux to an android-ftp-server app. during transfer every 0x0D bytes got replaced by 0x0A. I therefore needed a solution to fix this. However simply re-replacing all 0x0A with 0x0D wouldn't work, as there most likely where 0x0A bytes in the original file as well, which mustn't be replaced by 0x0D.
 

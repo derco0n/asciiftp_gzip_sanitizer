@@ -1,5 +1,5 @@
 CC=g++-10
-CFLAGS=-std=c++17
+CFLAGS=-std=c++17 -pthread
 LDFLAGS=-lz
 
 all: corrupter salvager
