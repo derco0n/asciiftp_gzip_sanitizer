@@ -15,3 +15,16 @@ This software reads in the whole gzip-binary file into memory, maps all 0x0A-byt
 
 If a valid combination is found, it will be written back to disk.
 
+## How to compile
+### Prerequisites
+You'll need gcc/g++ -10 as this project uses c++17 functionality.
+Furthermore you'll need zlib.
+
+To compile simply use the Makefile
+
+```
+cd src
+make
+```
+
+This should result in two files **corrupter** and **salvager**.
