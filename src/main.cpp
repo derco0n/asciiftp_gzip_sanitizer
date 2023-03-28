@@ -55,7 +55,7 @@ int main (int argc, char *argv[]){
         std::cout << "Directory created: " << workdir << std::endl;
     }
    
-    parser* fileparserPtr = new parser(inputfile);
+    parser* fileparserPtr = new parser(inputfile, workdir);
     if (!fileparserPtr->parse()){
         std::cerr << "Unable to read inputfile. Aborting!" << std::endl;
         return 1;

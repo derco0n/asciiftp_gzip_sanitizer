@@ -3,12 +3,19 @@
 //std::string _inputfile;
 
 
-parser::parser(std::string inputfile){ //constructor
+parser::parser(std::string inputfile, std::string workdir){ //constructor
     this->_inputfile=inputfile;
+    this->_workdir=workdir;
+
+    this->_statefile = _workdir;
+        if (!this->_statefile.empty() && this->_statefile.back() == '/') {
+            this->_statefile.pop_back();
+            }
+    this->_statefile=this->_statefile+"/state.bin";
 }
 
 parser::~parser(){ //destructor
-
+    this->savestate();
 }
 
 /**
@@ -61,79 +68,62 @@ bool parser::is_valid_gzip(const std::vector<uint8_t>& data) {
     return (ret == Z_STREAM_END);
 }
 
-bool parser::repair() {
-    if (is_valid_gzip(_inputcontent)){
-        std::cout << "Input-data is already valid gzip. Nothing to do." << std::endl;    
-        return true;
+void parser::savestate(){
+    std::ofstream outfile(this->_statefile, std::ios::out | std::ios::binary);
+    if (!outfile) {
+        // Failed to open the output file, so return false
+        return;
+    }
+    
+    //check if both options had been checked at that position
+    for (const uint64_t& elem : _tried_positionsboth){        
+        outfile.write(reinterpret_cast<const char*>(&elem), sizeof(uint64_t));
     }
 
-    // Make a copy of the original input content
-    std::vector<uint8_t> repaired_content = _inputcontent;
-
-    std::cout << "Checking data single-threaded." << std::endl;
-
-    // Try every possible combination of replacing 0x0a with 0x0d
-    /*
-    i: used to iterate through all possible binary values up to the size of the replacement positions
-    j: used to iterate through each replacement position and perform the replacement operation if necessary
-    (1 << _positions.size()):   This expression generates a bit mask with a binary value of 1 shifted to the left by the number of replacement positions.
-                                The result is a binary value with a 1 in the most significant bit and 0s in all other bits,
-                                which is equivalent to the decimal value 2 raised to the power of the number of replacement positions.
-                                This expression is used as the limit of the outer loop to iterate through every possible binary value up to this limit.
-
-
-    The code is trying to repair a corrupted file by replacing some bytes with a different value.
-    It does this by trying every possible combination of replacement values for a specific set of byte positions.
-    The outer loop iterates through all possible binary values up to a limit, 
-    which is calculated by shifting the value 1 to the left by the number of byte positions. 
-    The inner loop iterates through each byte position and determines whether to replace the byte with a different value or keep the original byte, 
-    based on whether the corresponding bit in the current binary value is set.
-    If the resulting repaired content is valid, the function returns true and the original content is replaced with the repaired content.
-    If no valid repaired content is found, the function returns false.
-    */
-
-    for (uint64_t i = 0; i < (1 << _positions.size()); i++) { 
-        for (uint64_t j = 0; j < _positions.size(); j++) {
-            if (i & (1 << j)) {
-                // Replace 0x0a with 0x0d at this position
-                if (repaired_content[_positions[j]]==0x0A){
-                    /*
-                    std::cout << "Altering \"";
-                    std::cout << std::showbase << std::hex << static_cast<int>(repaired_content[_positions[j]]);
-                    std::cout << "\" to \"0x0D\" at position ";
-                    std::cout << std::showbase << std::hex << static_cast<int>(j) << std::endl;
-                    */
-                    repaired_content[_positions[j]] = uint8_t(0x0D);
-                }
-                
-            } else {
-                // Keep the original byte at this position
-                /*
-                std::cout << "Keeping \"";
-                std::cout << std::showbase << std::hex << static_cast<int>(_inputcontent[_positions[j]]);
-                std::cout << "\" at position ";
-                std::cout << std::showbase << std::hex << static_cast<int>(j) << std::endl;                
-                */
-                repaired_content[_positions[j]] = _inputcontent[_positions[j]];
-            }
-
-            // Test if the repaired content is a valid gzip file
-            if (is_valid_gzip(repaired_content)) {
-                // The repaired content is valid, so we're done
-                _inputcontent = repaired_content;
-                return true;
-            }
-            /*
-            else {
-                std::cout << "Not a valid gzip so far..." << std::endl;
-            }
-            */
-        }
+    // Check if an error occurred during the write
+    if (!outfile) {
+        // An error occurred during the write, so return false
+        return;
     }
 
-    // If we get here, we couldn't repair the file
-    //throw std::runtime_error("Failed to repair gzip file");
-    return false;
+    // Close the output file
+    outfile.close();
+}
+
+void parser::loadstate() {    
+    
+    // Open the input file
+    std::ifstream infile(this->_statefile, std::ios::in | std::ios::binary);
+    if (!infile) {
+        // Failed to open the input file
+        return;
+    }
+    
+    // Determine the size of the file in bytes
+    infile.seekg(0, std::ios::end);
+    std::streampos fileSize = infile.tellg();
+    infile.seekg(0, std::ios::beg);
+    
+    // Check that the file size is a multiple of 8 bytes (size of uint64_t)
+    if (fileSize % sizeof(uint64_t) != 0) {
+        // File size is not a multiple of 8 bytes
+        return;
+    }
+    
+    // Read the file into the vector
+    this->_tried_positionsboth.resize(fileSize / sizeof(uint64_t));
+    infile.read(reinterpret_cast<char*>(this->_tried_positionsboth.data()), fileSize);
+    
+    // Check if an error occurred during the read
+    if (!infile) {
+        // An error occurred during the read, so return an empty vector
+        return;
+    }
+    
+    // Close the input file
+    infile.close();
+    
+    return;
 }
 
 bool parser::repair_mt() {
@@ -143,34 +133,86 @@ bool parser::repair_mt() {
     }
     
     // Make a copy of the original input content
-    std::vector<uint8_t> repaired_content = _inputcontent;    
+    //std::vector<uint8_t> repaired_content = _inputcontent;    
 
     std::vector<std::thread> threads;
     int num_threads = std::thread::hardware_concurrency();
-    std::cout << "Checking data multi-threaded using " << num_threads << " Threads." << std::endl;
+    uint256_t possibilities = 1 << _positions.size(); // This is the same as 2^_positions.size()
+
+    std::mutex mutiter;
+    uint16_t curriter=0; //iteration counter used to save state every 65535 cycles
+    uint256_t iterations=0; //iteration counter used to count all iterations
+
+    std::cout << "About to check " << possibilities << " possibilities multi-threaded using " << num_threads << " Threads." << std::endl;
     int batch_size = (1 << _positions.size()) / num_threads;
 
+    std::mutex found_valid_mutex;
     bool found_valid = false;
     for (int t = 0; t < num_threads; t++) {
         uint64_t start = t * batch_size;
         uint64_t end = (t == num_threads - 1) ? (1 << _positions.size()) : (start + batch_size);
 
         threads.emplace_back([&, start, end] {
-            for (uint64_t i = start; i < end; i++) { 
-                std::vector<uint8_t> local_repaired = repaired_content;
+
+            for (uint64_t i = start; i < end; i++) {                 
+                bool triedxa=false;
+                bool triedxd=false;
+
+                this->_tried_positionsboth_mutex.lock();
+                //Check if the current value already had been checked and skip it ...
+                bool donebefore=std::find(_tried_positionsxa.begin(), _tried_positionsxa.end(), i) != _tried_positionsxa.end();
+                this->_tried_positionsboth_mutex.unlock();
+                if (donebefore){ //if (contains...)
+                    continue;
+                    }                
+
+                
+
+                std::vector<uint8_t> local_repaired = _inputcontent;
+                
                 for (uint64_t j = 0; j < _positions.size(); j++) {
+                    mutiter.lock();
+                    if (iterations < uint256_max-1){
+                        iterations++;
+                    }
+                    if (curriter < UINT16_MAX-1){
+                        curriter++;
+                    }
+                    else {                        
+                        std::cout << iterations << "/" << possibilities << " possibilities tried so far..." << std::endl;
+                        savestate();
+                        curriter=0;
+                    }
+                    mutiter.unlock();
+                    
                     if (i & (1 << j)) {
                         // Replace 0x0a with 0x0d at this position
                         if (local_repaired[_positions[j]] == 0x0A) {
                             local_repaired[_positions[j]] = uint8_t(0x0D);
+                            triedxd=true;
+                            this->_tried_positionsxd_mutex.lock();
+                            _tried_positionsxd.push_back(_positions[j]); //store this position as tried.
+                            this->_tried_positionsxd_mutex.unlock();
                         }
+                        
                     } else {
                         local_repaired[_positions[j]] = _inputcontent[_positions[j]];
-                    }
+                        triedxa=true;
+                        this->_tried_positionsxa_mutex.lock();
+                        _tried_positionsxa.push_back(_positions[j]); //store this position as tried.
+                        this->_tried_positionsxa_mutex.unlock();
+                    } 
+                    if (triedxa && triedxd){ //store that both positions had been tried
+                        //std::cout << "both tried at " << _positions[j] << std::endl;
+                        this->_tried_positionsboth_mutex.lock();
+                        this->_tried_positionsboth.push_back(_positions[j]);
+                        this->_tried_positionsboth_mutex.unlock();
+                    }                   
                 }
 
                 if (is_valid_gzip(local_repaired)) {
                     // The repaired content is valid, so we're done
+                    std::lock_guard<std::mutex> lock(found_valid_mutex);
                     _inputcontent = local_repaired;
                     found_valid = true;
                     break;
@@ -219,6 +261,8 @@ bool parser::parse(){
     }
     file.close();   
     std::cout << "Found " << this->_positions.size() << " occurances of 0xA in the input file..." << std::endl;
+
+    
 
     return true;
 }

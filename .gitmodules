@@ -1,0 +1,3 @@
+[submodule "src/uint256_t"]
+	path = src/uint256_t
+	url = https://github.com/calccrypto/uint256_t.git
